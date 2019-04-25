@@ -6,13 +6,52 @@ version = "=1.25.0"
 # Local variables
 locals {
   service_prefix = "etil"
-  environment = "test"
+  environment = "test",
+  sql_admin_username = "etil_admin"
 }
 
 # Create a resource group
 resource "azurerm_resource_group" "rg" {
     name     = "${local.environment}"
     location = "West Europe"
+}
+
+# Create a SQL server with a database
+
+resource "random_string" "password" {
+  length = 16
+  special = true
+  #override_special = "/@\" "
+}
+
+resource "azurerm_sql_server" "sql-server" {
+  name                         = "${local.service_prefix}-${local.environment}"
+  resource_group_name          = "${azurerm_resource_group.rg.name}"
+  location                     = "${azurerm_resource_group.rg.location}"
+  version                      = "12.0"
+  administrator_login          = "${local.sql_admin_username}"
+  administrator_login_password = "${random_string.password.result}"
+}
+
+resource "azurerm_sql_database" "auth-sql-database" {
+  name                = "auth-${local.service_prefix}-${local.environment}"
+  resource_group_name = "${azurerm_resource_group.rg.name}"
+  location            = "${azurerm_resource_group.rg.location}"
+  server_name         = "${azurerm_sql_server.sql-server.name}"
+}
+
+resource "azurerm_sql_database" "import-sql-database" {
+  name                = "import-${local.service_prefix}-${local.environment}"
+  resource_group_name = "${azurerm_resource_group.rg.name}"
+  location            = "${azurerm_resource_group.rg.location}"
+  server_name         = "${azurerm_sql_server.sql-server.name}"
+}
+
+resource "azurerm_sql_database" "etil-sql-database" {
+  name                = "${local.service_prefix}-${local.environment}"
+  resource_group_name = "${azurerm_resource_group.rg.name}"
+  location            = "${azurerm_resource_group.rg.location}"
+  server_name         = "${azurerm_sql_server.sql-server.name}"
 }
 
 # Create an app service plan
@@ -33,33 +72,9 @@ resource "azurerm_app_service" "as" {
   app_service_plan_id   = "${azurerm_app_service_plan.sp.id}",
   location              = "${azurerm_resource_group.rg.location}",
   app_settings = {
-      ConnectionStrings__FContext = "",
-      ConnectionStrings__IContext = "",
+      ConnectionStrings__FContext = "${azurerm_sql_database.etil-sql-database.name}.database.windows.net;Initial Catalog=${azurerm_sql_database.etil-sql-database.name};Persist Security Info=True;User ID=${local.sql_admin_username};Password=${azurerm_sql_server.sql-server.administrator_login_password};MultipleActiveResultSets=True",
+      ConnectionStrings__IContext = "${azurerm_sql_database.import-sql-database.name}.database.windows.net;Initial Catalog=${azurerm_sql_database.import-sql-database.name};Persist Security Info=True;User ID=${local.sql_admin_username};Password=${azurerm_sql_server.sql-server.administrator_login_password};MultipleActiveResultSets=True",
       ConnectionStrings__RContext = "",
-      ConnectionStrings__AContext = "",
+      ConnectionStrings__AContext = "${azurerm_sql_database.auth-sql-database.name}.database.windows.net;Initial Catalog=${azurerm_sql_database.auth-sql-database.name};Persist Security Info=True;User ID=${local.sql_admin_username};Password=${azurerm_sql_server.sql-server.administrator_login_password};MultipleActiveResultSets=True",
   }
-}
-
-# Create a SQL server with a database
-
-resource "random_string" "password" {
-  length = 16
-  special = true
-  #override_special = "/@\" "
-}
-
-resource "azurerm_sql_server" "sql-server" {
-  name                         = "${local.service_prefix}-${local.environment}"
-  resource_group_name          = "${azurerm_resource_group.rg.name}"
-  location                     = "${azurerm_resource_group.rg.location}"
-  version                      = "12.0"
-  administrator_login          = "etil_admin"
-  administrator_login_password = "${random_string.password.result}"
-}
-
-resource "azurerm_sql_database" "auth-sql-database" {
-  name                = "auth-${local.service_prefix}-${local.environment}"
-  resource_group_name = "${azurerm_resource_group.rg.name}"
-  location            = "${azurerm_resource_group.rg.location}"
-  server_name         = "${azurerm_sql_server.sql-server.name}"
 }
