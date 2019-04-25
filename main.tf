@@ -67,6 +67,13 @@ resource "azurerm_redis_cache" "redis" {
   }
 }
 
+resource "azurerm_application_insights" "insights" {
+  name                = "${local.service_prefix}-${local.environment}",
+  resource_group_name = "${azurerm_resource_group.rg.name}",
+  location            = "${azurerm_resource_group.rg.location}",
+  application_type    = "web"
+}
+
 # Create an app service plan
 resource "azurerm_app_service_plan" "sp" {
   name                = "app-service-plan"
@@ -85,6 +92,7 @@ resource "azurerm_app_service" "as" {
   app_service_plan_id   = "${azurerm_app_service_plan.sp.id}",
   location              = "${azurerm_resource_group.rg.location}",
   app_settings = {
+      ApplicationInsights__InstrumentationKey = "${azurerm_application_insights.insights.instrumentation_key}",
       ConnectionStrings__FContext = "${azurerm_sql_database.etil-sql-database.name}.database.windows.net;Initial Catalog=${azurerm_sql_database.etil-sql-database.name};Persist Security Info=True;User ID=${local.sql_admin_username};Password=${azurerm_sql_server.sql-server.administrator_login_password};MultipleActiveResultSets=True",
       ConnectionStrings__IContext = "${azurerm_sql_database.import-sql-database.name}.database.windows.net;Initial Catalog=${azurerm_sql_database.import-sql-database.name};Persist Security Info=True;User ID=${local.sql_admin_username};Password=${azurerm_sql_server.sql-server.administrator_login_password};MultipleActiveResultSets=True",
       ConnectionStrings__RContext = "${azurerm_redis_cache.redis.name}.redis.cache.windows.net:6380,password=${azurerm_redis_cache.redis.primary_access_key},ssl=True,abortConnect=False,allowAdmin=true",
