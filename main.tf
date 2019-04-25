@@ -10,13 +10,13 @@ locals {
   sql_admin_username = "etil_admin"
 }
 
-# Create a resource group
+# Resource group
 resource "azurerm_resource_group" "rg" {
     name     = "${local.environment}"
     location = "West Europe"
 }
 
-# Create a SQL server with a database
+# SQL server with databases
 
 resource "random_string" "password" {
   length = 16
@@ -54,7 +54,7 @@ resource "azurerm_sql_database" "etil-sql-database" {
   server_name         = "${azurerm_sql_server.sql-server.name}"
 }
 
-# Create Azure Cache for Redis instance
+# Azure Cache for Redis instance
 resource "azurerm_redis_cache" "redis" {
   name                = "${local.service_prefix}-${local.environment}",
   location            = "${azurerm_resource_group.rg.location}",
@@ -67,6 +67,16 @@ resource "azurerm_redis_cache" "redis" {
   }
 }
 
+# Storage Account
+resource "azurerm_storage_account" "storage" {
+  name                     = "${local.service_prefix}-${local.environment}",
+  resource_group_name      = "${azurerm_resource_group.rg.name}",
+  location                 = "${azurerm_resource_group.rg.location}",
+  account_replication_type = "",
+  account_tier             = "",
+}
+
+# Application Insights
 resource "azurerm_application_insights" "insights" {
   name                = "${local.service_prefix}-${local.environment}",
   resource_group_name = "${azurerm_resource_group.rg.name}",
@@ -93,9 +103,10 @@ resource "azurerm_app_service" "as" {
   location              = "${azurerm_resource_group.rg.location}",
   app_settings = {
       ApplicationInsights__InstrumentationKey = "${azurerm_application_insights.insights.instrumentation_key}",
-      ConnectionStrings__FContext = "${azurerm_sql_database.etil-sql-database.name}.database.windows.net;Initial Catalog=${azurerm_sql_database.etil-sql-database.name};Persist Security Info=True;User ID=${local.sql_admin_username};Password=${azurerm_sql_server.sql-server.administrator_login_password};MultipleActiveResultSets=True",
-      ConnectionStrings__IContext = "${azurerm_sql_database.import-sql-database.name}.database.windows.net;Initial Catalog=${azurerm_sql_database.import-sql-database.name};Persist Security Info=True;User ID=${local.sql_admin_username};Password=${azurerm_sql_server.sql-server.administrator_login_password};MultipleActiveResultSets=True",
-      ConnectionStrings__RContext = "${azurerm_redis_cache.redis.name}.redis.cache.windows.net:6380,password=${azurerm_redis_cache.redis.primary_access_key},ssl=True,abortConnect=False,allowAdmin=true",
-      ConnectionStrings__AContext = "${azurerm_sql_database.auth-sql-database.name}.database.windows.net;Initial Catalog=${azurerm_sql_database.auth-sql-database.name};Persist Security Info=True;User ID=${local.sql_admin_username};Password=${azurerm_sql_server.sql-server.administrator_login_password};MultipleActiveResultSets=True",
+      AzureStorage__ConnectionString          = "DefaultEndpointsProtocol=https;AccountName=${azurerm_storage_account.storage.name};AccountKey=${azurerm_storage_account.storage.primary_access_key};EndpointSuffix=core.windows.net",
+      ConnectionStrings__FContext             = "${azurerm_sql_database.etil-sql-database.name}.database.windows.net;Initial Catalog=${azurerm_sql_database.etil-sql-database.name};Persist Security Info=True;User ID=${local.sql_admin_username};Password=${azurerm_sql_server.sql-server.administrator_login_password};MultipleActiveResultSets=True",
+      ConnectionStrings__IContext             = "${azurerm_sql_database.import-sql-database.name}.database.windows.net;Initial Catalog=${azurerm_sql_database.import-sql-database.name};Persist Security Info=True;User ID=${local.sql_admin_username};Password=${azurerm_sql_server.sql-server.administrator_login_password};MultipleActiveResultSets=True",
+      ConnectionStrings__RContext             = "${azurerm_redis_cache.redis.name}.redis.cache.windows.net:6380,password=${azurerm_redis_cache.redis.primary_access_key},ssl=True,abortConnect=False,allowAdmin=true",
+      ConnectionStrings__AContext             = "${azurerm_sql_database.auth-sql-database.name}.database.windows.net;Initial Catalog=${azurerm_sql_database.auth-sql-database.name};Persist Security Info=True;User ID=${local.sql_admin_username};Password=${azurerm_sql_server.sql-server.administrator_login_password};MultipleActiveResultSets=True",
   }
 }
